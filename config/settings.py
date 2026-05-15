@@ -6,7 +6,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-key')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'  # Default to True for development
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if h.strip()
+]
+
+# HTTPS behind reverse proxy (Heroku, Railway, Render, nginx)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    _csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+    if _csrf_origins.strip():
+        CSRF_TRUSTED_ORIGINS = [
+            o.strip()
+            for o in _csrf_origins.split(',')
+            if o.strip()
+        ]
 
 # HTTPS Security (Production)
 SECURE_SSL_REDIRECT = not DEBUG
