@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+
+    <h2 class="text-xl font-bold mb-4">{{ task.title }}</h2>
+
+    <p class="mb-3">{{ task.description }}</p>
+
+    <a href="{{ task.target_link }}" target="_blank"
+       class="text-blue-600 underline mb-3 block">
+        Open Task Link
+    </a>
+
+    <p class="text-sm text-gray-600 mb-3">
+        1. Share this post on Facebook<br>
+        2. Copy your post link<br>
+        3. Paste it below<br>
+        4. Upload screenshot (optional)
+    </p>
+
+    {% if error %}
+        <p class="text-red-500 mb-2">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <input type="text" name="link"
+               placeholder="Paste your Facebook post link"
+               class="w-full p-2 border mb-3">
+
+        <input type="file" name="screenshot"
+               class="w-full p-2 border mb-3">
+
+        <button class="bg-green-600 text-white px-4 py-2 w-full rounded">
+            Submit Task
+        </button>
+    </form>
+
+</div>
+
+{% endblock %}

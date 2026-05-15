@@ -1,0 +1,109 @@
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from .models import Task, TaskSubmission
+from wallet.models import Wallet
+from verification.tasks import start_verification
+
+
+# 📋 TASK LIST
+@login_required
+def tasks_view(request):
+    tasks = Task.objects.filter(is_active=True)
+    return render(request, 'tasks.html', {'tasks': tasks})
+
+
+# 📤 SUBMIT TASK (FINAL)
+@login_required
+def submit_task(request, task_id):
+    task = get_object_or_404(Task, id=task_id)
+
+    # ❌ duplicate block
+    if TaskSubmission.objects.filter(user=request.user, task=task).exists():
+        return redirect('dashboard')
+
+    if request.method == "POST":
+        link = request.POST.get("link")
+        screenshot = request.FILES.get("screenshot")
+
+        if not link:
+            return render(request, 'submit_task.html', {
+                'task': task,
+                'error': 'Please enter a link'
+            })
+
+        submission = TaskSubmission.objects.create(
+            user=request.user,
+            task=task,
+            submitted_link=link,
+            screenshot=screenshot,
+            status='level1_pending'
+        )
+
+        start_verification(submission.id)
+
+        return redirect('dashboard')
+
+    return render(request, 'submit_task.html', {'task': task})
+
+
+@login_required
+def create_task_view(request):
+    if not request.user.is_staff:
+        raise PermissionDenied()
+
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        task_type = request.POST.get('task_type')
+        target_link = request.POST.get('target_link')
+        reward = request.POST.get('reward')
+        total_slots = request.POST.get('total_slots')
+
+        if not title or not target_link or not reward:
+            return render(request, 'create_task.html', {
+                'error': 'Title, target link, and reward are required.'
+            })
+
+        Task.objects.create(
+            title=title,
+            description=description,
+            task_type=task_type,
+            target_link=target_link,
+            reward=reward,
+            total_slots=total_slots or 100,
+        )
+        return redirect('tasks')
+
+    return render(request, 'create_task.html')
+
+
+# 📊 DASHBOARD
+@login_required
+def dashboard(request):
+    user = request.user
+
+    total_tasks = Task.objects.count()
+
+    completed = TaskSubmission.objects.filter(
+        user=user, status='approved'
+    ).count()
+
+    wallet, _ = Wallet.objects.get_or_create(user=user)
+
+    trust_score = None
+    try:
+        trust_score = request.user.usertrustscore.trust_score
+    except Exception:
+        trust_score = None
+
+    return render(request, 'dashboard.html', {
+        'total_tasks': total_tasks,
+        'completed': completed,
+        'pending_count': TaskSubmission.objects.filter(
+            user=user,
+            status__in=['pending', 'level1_pending', 'level2_pending', 'level3_pending', 'manual_review']
+        ).count(),
+        'balance': wallet.balance,
+        'trust_score': trust_score,
+    })

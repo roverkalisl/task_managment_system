@@ -1,0 +1,29 @@
+<!-- templates/tasks.html -->
+{% extends 'base.html' %}
+{% block content %}
+
+<h2 class="text-2xl font-bold mb-4">Available Tasks</h2>
+
+<div class="grid md:grid-cols-2 gap-4">
+
+{% for task in tasks %}
+<div class="bg-white p-4 rounded shadow">
+
+    <h3 class="font-bold text-lg">{{ task.title }}</h3>
+    <p>{{ task.description }}</p>
+
+    <p class="text-green-600 font-bold mt-2">
+        Reward: Rs. {{ task.reward }}
+    </p>
+
+    <a href="{% url 'submit_task' task.id %}"
+       class="bg-blue-600 text-white px-4 py-2 mt-3 inline-block rounded">
+        Start Task
+    </a>
+
+</div>
+{% endfor %}
+
+</div>
+
+{% endblock %}

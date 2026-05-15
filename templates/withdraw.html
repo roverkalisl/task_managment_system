@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-xl font-bold mb-4">Withdraw Money</h2>
+
+    <p class="mb-3">Available Balance: Rs. {{ balance }}</p>
+
+    {% if error %}
+        <p class="text-red-500">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <input type="number" name="amount" placeholder="Amount"
+            class="w-full p-2 border mb-2">
+
+        <input type="text" name="bank_name" placeholder="Bank Name"
+            class="w-full p-2 border mb-2">
+
+        <input type="text" name="account_number" placeholder="Account Number"
+            class="w-full p-2 border mb-2">
+
+        <input type="text" name="account_name" placeholder="Account Name"
+            class="w-full p-2 border mb-2">
+
+        <button class="bg-green-600 text-white px-4 py-2 w-full rounded">
+            Request Withdraw
+        </button>
+    </form>
+</div>
+
+{% endblock %}
