@@ -1,25 +1,5 @@
-# FB Task Platform — runtime dependencies only
-# Install: pip install -r requirements.txt
-
 Django==5.2.9
-djangorestframework==3.16.0
-whitenoise==6.6.0
-
-# PostgreSQL (used when DATABASE_URL is set)
-dj-database-url==2.2.0
-psycopg2-binary==2.9.10
-
-# Task verification (HTTP checks, screenshots / OCR)
-requests==2.32.3
-Pillow==12.1.1
-pytesseract==0.3.13
-
-# Browser automation for Facebook verification
-playwright==1.48.0
-greenlet>=3.1.0
-
-# Background task processing
-celery[redis]==5.4.0
-
-# Production WSGI (not used on Windows dev servers)
-gunicorn==23.0.0; sys_platform != "win32"
+gunicorn
+whitenoise
+requests
+Pillow
