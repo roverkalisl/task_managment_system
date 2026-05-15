@@ -71,6 +71,7 @@ def login_view(request):
 
         if user:
             login(request, user)
+            UserTrustScore.objects.get_or_create(user=user)
             return redirect('dashboard')
         else:
             return render(request, 'login.html', {'error': 'Invalid login'})

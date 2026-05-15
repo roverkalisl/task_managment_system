@@ -51,12 +51,24 @@ def withdraw_request(request):
             messages.error(request, "You already have a pending request")
             return redirect('wallet')
 
+        method = request.POST.get('method') or 'bank'
+        if method not in dict(WithdrawRequest.PAYMENT_METHODS):
+            method = 'bank'
+
+        bank_name = request.POST.get('bank_name', '').strip()
+        account_number = request.POST.get('account_number', '').strip()
+        account_name = request.POST.get('account_name', '').strip()
+        details = (
+            f'Bank: {bank_name}\n'
+            f'Account: {account_number}\n'
+            f'Name: {account_name}'
+        ).strip()
+
         WithdrawRequest.objects.create(
             user=request.user,
             amount=amount,
-            bank_name=request.POST.get("bank_name"),
-            account_number=request.POST.get("account_number"),
-            account_name=request.POST.get("account_name"),
+            method=method,
+            details=details,
         )
 
         wallet.balance -= amount
@@ -65,9 +77,9 @@ def withdraw_request(request):
         Transaction.objects.create(
             user=request.user,
             amount=amount,
-            transaction_type='debit',
+            transaction_type='withdraw',
             status='pending',
-            reference="Withdraw request"
+            reference='Withdraw request',
         )
 
         messages.success(request, "Withdraw request submitted successfully")

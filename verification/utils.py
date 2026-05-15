@@ -613,13 +613,11 @@ def detect_fake_link(url):
                 'reason': f'Suspicious pattern detected: {pattern}',
             }
 
-    # Check if URL structure looks like Facebook group post
-    if not re.match(r'https?://(www\.)?facebook\.com/groups/[^/]+/posts/\d+', url):
-        if not re.match(r'https?://(www\.)?facebook\.com/groups/[^/]+/permalink/\d+', url):
-            return {
-                'is_fake': True,
-                'reason': 'URL does not match Facebook group post format',
-            }
+    if not is_facebook_link(url):
+        return {
+            'is_fake': True,
+            'reason': 'Not a Facebook URL',
+        }
 
     return {
         'is_fake': False,

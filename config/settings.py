@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
 
     'accounts',
-    'task',
+    'task.apps.TaskConfig',
     'wallet',
     'verification',
     'api',

@@ -113,29 +113,35 @@ def create_task_view(request):
 # 📊 DASHBOARD
 @login_required
 def dashboard(request):
+    from accounts.models import UserTrustScore
+
     user = request.user
 
-    total_tasks = Task.objects.count()
+    total_tasks = Task.objects.filter(is_active=True).count()
 
-    completed = TaskSubmission.objects.filter(
-        user=user, status='approved'
+    user_submissions = TaskSubmission.objects.filter(user=user)
+    completed = user_submissions.filter(status='approved').count()
+    pending_count = user_submissions.filter(
+        status__in=[
+            'pending',
+            'level1_pending',
+            'level2_pending',
+            'level3_pending',
+            'manual_review',
+        ]
     ).count()
+    rejected_count = user_submissions.filter(status='rejected').count()
 
     wallet, _ = Wallet.objects.get_or_create(user=user)
-
-    trust_score = None
-    try:
-        trust_score = request.user.usertrustscore.trust_score
-    except Exception:
-        trust_score = None
+    trust, _ = UserTrustScore.objects.get_or_create(user=user)
+    recent_submissions = user_submissions.select_related('task').order_by('-submitted_at')[:5]
 
     return render(request, 'dashboard.html', {
         'total_tasks': total_tasks,
         'completed': completed,
-        'pending_count': TaskSubmission.objects.filter(
-            user=user,
-            status__in=['pending', 'level1_pending', 'level2_pending', 'level3_pending', 'manual_review']
-        ).count(),
+        'pending_count': pending_count,
+        'rejected_count': rejected_count,
         'balance': wallet.balance,
-        'trust_score': trust_score,
+        'trust_score': trust.trust_score,
+        'recent_submissions': recent_submissions,
     })

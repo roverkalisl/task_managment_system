@@ -1,6 +1,5 @@
 ﻿import logging
 import os
-from threading import Thread
 
 try:
     from celery import shared_task
@@ -28,7 +27,11 @@ def verify_submission(submission_id):
     submission.save()
 
     if submission.task.task_type == 'share':
-        result = run_facebook_group_verification(submission)
+        from verification.utils import sync_playwright
+        if sync_playwright is not None:
+            result = run_facebook_group_verification(submission)
+        else:
+            result = run_submission_verification(submission)
     else:
         result = run_submission_verification(submission)
 
@@ -113,7 +116,7 @@ def _run_verification_in_thread(submission_id):
 
 
 def start_verification(submission_id):
-    """Run verification in Celery when configured, otherwise in a background thread."""
+    """Run verification so dashboard stats update reliably (sync on Render/Gunicorn)."""
     use_celery = os.getenv('USE_CELERY', '').lower() in ('1', 'true', 'yes')
     if use_celery and hasattr(verify_submission, 'delay'):
         try:
@@ -121,9 +124,10 @@ def start_verification(submission_id):
             return
         except Exception:
             logger.warning(
-                'Celery unavailable; falling back to thread for submission %s',
+                'Celery unavailable; running sync verification for submission %s',
                 submission_id,
                 exc_info=True,
             )
 
-    Thread(target=_run_verification_in_thread, args=(submission_id,), daemon=True).start()
+    # Gunicorn kills daemon threads — run in-request so wallet/status/trust update
+    _run_verification_in_thread(submission_id)

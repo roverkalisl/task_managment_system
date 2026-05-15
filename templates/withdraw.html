@@ -13,8 +13,14 @@
     <form method="POST">
         {% csrf_token %}
 
-        <input type="number" name="amount" placeholder="Amount"
-            class="w-full p-2 border mb-2">
+        <input type="number" name="amount" placeholder="Amount" min="500" step="0.01"
+            class="w-full p-2 border mb-2" required>
+
+        <select name="method" class="w-full p-2 border mb-2">
+            <option value="bank">Bank Transfer</option>
+            <option value="ezcash">eZ Cash</option>
+            <option value="mcash">mCash</option>
+        </select>
 
         <input type="text" name="bank_name" placeholder="Bank Name"
             class="w-full p-2 border mb-2">
