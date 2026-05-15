@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 
 # 🔹 Accounts
 from accounts.views import login_view, register_view, logout_view, create_user_view
@@ -29,6 +29,9 @@ urlpatterns = [
     path('tasks/', tasks_view, name='tasks'),
     path('tasks/create/', create_task_view, name='create_task'),
     path('submit/<int:task_id>/', submit_task, name='submit_task'),
+
+    # Mobile / API (DRF)
+    path('api/', include('api.urls')),
 
     # 💰 Wallet
     path('wallet/', wallet_view, name='wallet'),
