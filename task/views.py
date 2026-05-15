@@ -3,7 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from .models import Task, TaskSubmission
 from wallet.models import Wallet
-from verification.tasks import start_verification
+
+try:
+    from verification.tasks import start_verification
+except ImportError:
+    # Fallback if verification not available
+    def start_verification(submission_id):
+        pass
 
 
 # 📋 TASK LIST

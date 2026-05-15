@@ -64,6 +64,11 @@ class TaskSubmission(models.Model):
     is_suspicious = models.BooleanField(default=False)
     fraud_flags = models.JSONField(default=list)  # List of fraud indicators
 
+    # Group information (for Facebook group shares)
+    group_name = models.CharField(max_length=255, null=True, blank=True)
+    group_link = models.URLField(null=True, blank=True)
+    group_visibility = models.CharField(max_length=20, null=True, blank=True)  # Public/Private/Unknown
+
     # Verification metadata
     verification_attempts = models.IntegerField(default=0)
     last_verification_attempt = models.DateTimeField(null=True, blank=True)

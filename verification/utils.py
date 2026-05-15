@@ -21,6 +21,11 @@ try:
 except ImportError:
     pytesseract = None
 
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
 FACEBOOK_GRAPH_BASE = 'https://graph.facebook.com/v17.0'
 FACEBOOK_PATH_PATTERNS = [
     '/posts/',
@@ -394,4 +399,360 @@ def run_submission_verification(submission):
             'level3': level3,
         },
         'overall_confidence': overall_confidence,
+    }
+
+
+def verify_facebook_group_share(submitted_url, target_link, access_token=None):
+    """
+    Verify Facebook group share using Playwright for scraping.
+    """
+    if sync_playwright is None:
+        return {
+            'valid': False,
+            'reason': 'Playwright not available; install playwright package',
+            'needs_review': True,
+            'group_info': None,
+        }
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            )
+            page = context.new_page()
+
+            # Navigate to the submitted URL
+            page.goto(submitted_url, timeout=30000)
+
+            # Wait for content to load
+            page.wait_for_load_state('networkidle', timeout=10000)
+
+            # Check if it's a Facebook page
+            if 'facebook.com' not in page.url:
+                return {
+                    'valid': False,
+                    'reason': 'Not a Facebook URL',
+                    'needs_review': False,
+                    'group_info': None,
+                }
+
+            # Check if it's a group post
+            url_parts = urlparse(page.url)
+            if '/groups/' not in url_parts.path:
+                return {
+                    'valid': False,
+                    'reason': 'Not posted to a Facebook group',
+                    'needs_review': False,
+                    'group_info': None,
+                }
+
+            # Extract group information
+            group_info = extract_group_info(page)
+
+            # Check if post exists (not deleted/hidden)
+            post_content = page.locator('[data-ad-preview="message"]').first
+            if not post_content.is_visible():
+                post_content = page.locator('[data-pagelet="FeedUnit_0"]').first
+
+            if not post_content.is_visible():
+                return {
+                    'valid': False,
+                    'reason': 'Post not found or deleted',
+                    'needs_review': False,
+                    'group_info': group_info,
+                }
+
+            # Get post text content
+            post_text = post_content.text_content().lower()
+
+            # Check if target link is included in the shared post
+            target_domain = urlparse(target_link).netloc.lower()
+            target_path = urlparse(target_link).path.lower()
+
+            link_found = False
+            if target_link.lower() in post_text:
+                link_found = True
+            elif target_domain in post_text and target_path in post_text:
+                link_found = True
+            else:
+                # Check for links in the post
+                links = post_content.locator('a').all()
+                for link in links:
+                    href = link.get_attribute('href') or ''
+                    if target_link in href or (target_domain in href and target_path in href):
+                        link_found = True
+                        break
+
+            if not link_found:
+                return {
+                    'valid': False,
+                    'reason': 'Original post/link not found in the shared content',
+                    'needs_review': False,
+                    'group_info': group_info,
+                }
+
+            browser.close()
+
+            return {
+                'valid': True,
+                'reason': 'Facebook group share verified successfully',
+                'needs_review': False,
+                'group_info': group_info,
+            }
+
+    except Exception as e:
+        return {
+            'valid': False,
+            'reason': f'Verification failed: {str(e)}',
+            'needs_review': True,
+            'group_info': None,
+        }
+
+
+def extract_group_info(page):
+    """
+    Extract group information from the Facebook page.
+    """
+    try:
+        # Group name
+        group_name_selectors = [
+            '[data-pagelet="GroupHeader"] h1',
+            'h1[data-hovercard-user-id]',
+            '[role="main"] h1',
+            'h1'
+        ]
+
+        group_name = None
+        for selector in group_name_selectors:
+            try:
+                element = page.locator(selector).first
+                if element.is_visible():
+                    group_name = element.text_content().strip()
+                    break
+            except:
+                continue
+
+        # Group link
+        group_link = page.url.split('/posts/')[0].split('/permalink')[0]
+
+        # Visibility (hard to determine without API, but we can check for lock icon or text)
+        visibility = 'Unknown'
+        if page.locator('[aria-label*="Private"]').is_visible() or 'private' in page.content().lower():
+            visibility = 'Private'
+        elif page.locator('[aria-label*="Public"]').is_visible() or 'public' in page.content().lower():
+            visibility = 'Public'
+
+        return {
+            'name': group_name,
+            'link': group_link,
+            'visibility': visibility,
+            'share_post_url': page.url,
+        }
+    except Exception:
+        return {
+            'name': None,
+            'link': None,
+            'visibility': 'Unknown',
+            'share_post_url': page.url,
+        }
+
+
+def check_duplicate_submission(submitted_url, user):
+    """
+    Check if the same URL was submitted by the same user or recently by others.
+    """
+    from task.models import TaskSubmission
+
+    # Check user's own submissions
+    user_submissions = TaskSubmission.objects.filter(
+        user=user,
+        submitted_link=submitted_url
+    ).exclude(status='rejected')
+
+    if user_submissions.exists():
+        return {
+            'is_duplicate': True,
+            'reason': 'Same URL submitted by user before',
+        }
+
+    # Check recent submissions by other users (last 24 hours)
+    recent_submissions = TaskSubmission.objects.filter(
+        submitted_link=submitted_url,
+        submitted_at__gte=timezone.now() - timedelta(hours=24)
+    ).exclude(user=user)
+
+    if recent_submissions.exists():
+        return {
+            'is_duplicate': True,
+            'reason': 'URL recently submitted by another user',
+        }
+
+    return {
+        'is_duplicate': False,
+        'reason': None,
+    }
+
+
+def detect_fake_link(url):
+    """
+    Basic fake link detection.
+    """
+    # Check for suspicious patterns
+    suspicious_patterns = [
+        'bit.ly', 'tinyurl.com', 'goo.gl',  # URL shorteners
+        'facebook.com/l.php',  # Facebook redirect
+        'fake', 'test', 'dummy'  # Common fake words
+    ]
+
+    url_lower = url.lower()
+    for pattern in suspicious_patterns:
+        if pattern in url_lower:
+            return {
+                'is_fake': True,
+                'reason': f'Suspicious pattern detected: {pattern}',
+            }
+
+    # Check if URL structure looks like Facebook group post
+    if not re.match(r'https?://(www\.)?facebook\.com/groups/[^/]+/posts/\d+', url):
+        if not re.match(r'https?://(www\.)?facebook\.com/groups/[^/]+/permalink/\d+', url):
+            return {
+                'is_fake': True,
+                'reason': 'URL does not match Facebook group post format',
+            }
+
+    return {
+        'is_fake': False,
+        'reason': None,
+    }
+
+
+def run_facebook_group_verification(submission):
+    """
+    Main verification function for Facebook group shares.
+    """
+    submitted_url = submission.submitted_link
+    target_link = submission.task.target_link
+    user = submission.user
+
+    # Level 1: Basic validation
+    if not is_valid_url(submitted_url):
+        return {
+            'level1_passed': False,
+            'level1_confidence': 0.0,
+            'level2_passed': False,
+            'level2_confidence': 0.0,
+            'level3_passed': False,
+            'level3_confidence': 0.0,
+            'valid': False,
+            'needs_review': False,
+            'reason': 'Invalid URL format',
+            'fraud_flags': ['invalid_url'],
+            'group_info': None,
+        }
+
+    if not is_facebook_link(submitted_url):
+        return {
+            'level1_passed': False,
+            'level1_confidence': 0.0,
+            'level2_passed': False,
+            'level2_confidence': 0.0,
+            'level3_passed': False,
+            'level3_confidence': 0.0,
+            'valid': False,
+            'needs_review': False,
+            'reason': 'Not a Facebook URL',
+            'fraud_flags': ['not_facebook'],
+            'group_info': None,
+        }
+
+    # Check for fake links
+    fake_check = detect_fake_link(submitted_url)
+    if fake_check['is_fake']:
+        return {
+            'level1_passed': False,
+            'level1_confidence': 0.0,
+            'level2_passed': False,
+            'level2_confidence': 0.0,
+            'level3_passed': False,
+            'level3_confidence': 0.0,
+            'valid': False,
+            'needs_review': False,
+            'reason': fake_check['reason'],
+            'fraud_flags': ['fake_link'],
+            'group_info': None,
+        }
+
+    # Check for duplicates
+    duplicate_check = check_duplicate_submission(submitted_url, user)
+    if duplicate_check['is_duplicate']:
+        return {
+            'level1_passed': False,
+            'level1_confidence': 0.0,
+            'level2_passed': False,
+            'level2_confidence': 0.0,
+            'level3_passed': False,
+            'level3_confidence': 0.0,
+            'valid': False,
+            'needs_review': False,
+            'reason': duplicate_check['reason'],
+            'fraud_flags': ['duplicate_link'],
+            'group_info': None,
+        }
+
+    # Level 1 passed
+    level1_result = {
+        'valid': True,
+        'confidence': 0.8,
+        'reason': 'Basic validation passed',
+    }
+
+    # Level 2: Facebook group share verification
+    access_token = os.getenv('FACEBOOK_GRAPH_ACCESS_TOKEN') or getattr(settings, 'FACEBOOK_GRAPH_ACCESS_TOKEN', None)
+    group_verification = verify_facebook_group_share(submitted_url, target_link, access_token)
+
+    level2_result = {
+        'valid': group_verification['valid'],
+        'confidence': 0.9 if group_verification['valid'] else 0.0,
+        'reason': group_verification['reason'],
+        'group_info': group_verification['group_info'],
+    }
+
+    # Level 3: Screenshot verification (if provided)
+    level3_result = analyze_screenshot(submission.screenshot, submitted_url)
+
+    # Overall assessment
+    fraud_flags = []
+    if duplicate_check['is_duplicate']:
+        fraud_flags.append('duplicate_link')
+    if fake_check['is_fake']:
+        fraud_flags.append('fake_link')
+
+    valid = level1_result['valid'] and level2_result['valid']
+    needs_review = group_verification['needs_review'] or level3_result['needs_review']
+
+    if valid and not needs_review:
+        final_reason = 'Facebook group share verified successfully'
+    elif valid and needs_review:
+        final_reason = 'Verification passed but needs manual review'
+    else:
+        final_reason = group_verification['reason']
+
+    return {
+        'level1_passed': level1_result['valid'],
+        'level1_confidence': level1_result['confidence'],
+        'level2_passed': level2_result['valid'],
+        'level2_confidence': level2_result['confidence'],
+        'level3_passed': level3_result['valid'],
+        'level3_confidence': level3_result['confidence'],
+        'valid': valid,
+        'needs_review': needs_review,
+        'reason': final_reason,
+        'fraud_flags': fraud_flags,
+        'group_info': group_verification['group_info'],
+        'details': {
+            'level1': level1_result,
+            'level2': level2_result,
+            'level3': level3_result,
+        },
     }
