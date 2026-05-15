@@ -1,16 +1,22 @@
-﻿try:
+﻿import logging
+import os
+from threading import Thread
+
+try:
     from celery import shared_task
 except ImportError:
-    # Fallback if Celery not available
     def shared_task(func):
         return func
 
+from django.db import close_old_connections
 from django.utils import timezone
 
 from accounts.models import UserTrustScore
 from task.models import TaskSubmission
 from wallet.models import Wallet, Transaction
 from verification.utils import run_submission_verification, run_facebook_group_verification
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task
@@ -21,7 +27,6 @@ def verify_submission(submission_id):
     submission.status = 'level1_pending'
     submission.save()
 
-    # Use appropriate verification based on task type
     if submission.task.task_type == 'share':
         result = run_facebook_group_verification(submission)
     else:
@@ -37,7 +42,6 @@ def verify_submission(submission_id):
     submission.feedback = result.get('reason')
     submission.verified_at = timezone.now()
 
-    # Save group information if available
     group_info = result.get('group_info')
     if group_info:
         submission.group_name = group_info.get('name')
@@ -56,11 +60,15 @@ def verify_submission(submission_id):
             user_trust.duplicate_links_count += 1
         if flag == 'fast_submission':
             user_trust.fast_submissions_count += 1
-        if flag == 'invalid_facebook_path' or flag == 'graph_api_failed':
-            user_trust.suspicious_patterns_count += 1
-        if flag == 'private_or_hidden_post' or flag == 'screenshot_inconclusive':
-            user_trust.suspicious_patterns_count += 1
-        if flag == 'fake_link' or flag == 'invalid_url' or flag == 'not_facebook':
+        if flag in (
+            'invalid_facebook_path',
+            'graph_api_failed',
+            'private_or_hidden_post',
+            'screenshot_inconclusive',
+            'fake_link',
+            'invalid_url',
+            'not_facebook',
+        ):
             user_trust.suspicious_patterns_count += 1
 
     user_trust.last_submission_at = submission.submitted_at
@@ -91,10 +99,31 @@ def verify_submission(submission_id):
         submission.status = 'rejected'
         submission.save()
 
-    # Return result for potential chaining
     return result
 
 
+def _run_verification_in_thread(submission_id):
+    close_old_connections()
+    try:
+        verify_submission(submission_id)
+    except Exception:
+        logger.exception('Verification failed for submission %s', submission_id)
+    finally:
+        close_old_connections()
+
+
 def start_verification(submission_id):
-    """Start verification asynchronously using Celery"""
-    verify_submission.delay(submission_id)
+    """Run verification in Celery when configured, otherwise in a background thread."""
+    use_celery = os.getenv('USE_CELERY', '').lower() in ('1', 'true', 'yes')
+    if use_celery and hasattr(verify_submission, 'delay'):
+        try:
+            verify_submission.delay(submission_id)
+            return
+        except Exception:
+            logger.warning(
+                'Celery unavailable; falling back to thread for submission %s',
+                submission_id,
+                exc_info=True,
+            )
+
+    Thread(target=_run_verification_in_thread, args=(submission_id,), daemon=True).start()

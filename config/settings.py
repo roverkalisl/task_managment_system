@@ -11,12 +11,15 @@ SECRET_KEY = os.environ.get(
     "django-insecure-change-this-key"
 )
 
-DEBUG = False
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = [
-    'task-managment-system-ryjg.onrender.com',
-    '127.0.0.1',
-    'localhost',
+    h.strip()
+    for h in os.getenv(
+        'ALLOWED_HOSTS',
+        'task-managment-system-ryjg.onrender.com,127.0.0.1,localhost',
+    ).split(',')
+    if h.strip()
 ]
 
 
@@ -29,7 +32,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Your Apps
+    'rest_framework',
+    'rest_framework.authtoken',
+
     'accounts',
     'task',
     'wallet',
@@ -80,12 +85,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # DATABASE
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # PASSWORD VALIDATION
@@ -132,27 +146,33 @@ AUTH_USER_MODEL = 'accounts.User'
 
 
 # LOGIN URLS
-LOGIN_URL = 'login'
+LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
 
 # WHITENOISE STATIC FILES
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 
 # SECURITY SETTINGS
-CSRF_TRUSTED_ORIGINS = [
+_csrf_origins = os.getenv(
+    'CSRF_TRUSTED_ORIGINS',
     'https://task-managment-system-ryjg.onrender.com',
-]
+)
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
 
-
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-
-# OPTIONAL SECURITY
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 # CELERY CONFIGURATION
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

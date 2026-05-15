@@ -1,8 +1,13 @@
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
+from django.db import DatabaseError
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from .models import Task, TaskSubmission
 from wallet.models import Wallet
+
+_url_validator = URLValidator()
 
 try:
     from verification.tasks import start_verification
@@ -38,15 +43,36 @@ def submit_task(request, task_id):
                 'error': 'Please enter a link'
             })
 
-        submission = TaskSubmission.objects.create(
-            user=request.user,
-            task=task,
-            submitted_link=link,
-            screenshot=screenshot,
-            status='level1_pending'
-        )
+        link = link.strip()
+        if not link.startswith(('http://', 'https://')):
+            link = f'https://{link}'
 
-        start_verification(submission.id)
+        try:
+            _url_validator(link)
+        except ValidationError:
+            return render(request, 'submit_task.html', {
+                'task': task,
+                'error': 'Please enter a valid URL (e.g. https://facebook.com/...)',
+            })
+
+        try:
+            submission = TaskSubmission.objects.create(
+                user=request.user,
+                task=task,
+                submitted_link=link,
+                screenshot=screenshot,
+                status='level1_pending',
+            )
+        except (ValidationError, DatabaseError):
+            return render(request, 'submit_task.html', {
+                'task': task,
+                'error': 'Could not save submission. Ask admin to run database migrations.',
+            })
+
+        try:
+            start_verification(submission.id)
+        except Exception:
+            pass
 
         return redirect('dashboard')
 
