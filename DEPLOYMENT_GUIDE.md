@@ -3,8 +3,10 @@
 ## 📋 Prerequisites
 
 - Git account
-- Heroku account (free tier available)
+- Render.com account (recommended) or Heroku account
+- Redis service (Render Redis, Redis Labs, etc.)
 - Domain name (optional)
+- Facebook Graph API access token (optional, for enhanced verification)
 
 ---
 
@@ -14,6 +16,7 @@
 
 ```bash
 pip install -r requirements.txt
+playwright install  # Install browser binaries for Facebook verification
 ```
 
 ### 1.2 Run Migrations
@@ -34,19 +37,198 @@ python manage.py createsuperuser
 python manage.py collectstatic --noinput
 ```
 
-### 1.5 Test Locally
+### 1.5 Test Facebook Verification
 
 ```bash
+# Test basic functionality
+python test_verification.py
+
+# Test full Facebook verification (requires internet)
+python test_verification.py --full
+```
+
+### 1.6 Test Locally
+
+```bash
+# Terminal 1: Start Redis
+redis-server
+
+# Terminal 2: Start Celery worker
+celery -A config worker --loglevel=info
+
+# Terminal 3: Start Django
 python manage.py runserver
 ```
 
 Visit `http://127.0.0.1:8000` and test:
 - User registration
 - Task creation (as admin)
-- Task submission
-- Verification process
+- Facebook group share task submission
+- Verification process (should take 5-10 minutes)
 
 ---
+
+## 🌐 Step 2: Deploy to Render.com
+
+### 2.1 Create Render Services
+
+#### Web Service (Django App)
+1. Connect your GitHub repository
+2. Set service name: `fb-task-platform`
+3. Set runtime: `Python 3`
+4. Build Command:
+   ```bash
+   pip install -r requirements.txt && playwright install
+   ```
+5. Start Command:
+   ```bash
+   gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+   ```
+
+#### Redis Service
+1. Create a new Redis service
+2. Note the connection URL for environment variables
+
+#### Background Worker (Celery)
+1. Create another web service for Celery
+2. Start Command:
+   ```bash
+   celery -A config worker --loglevel=info
+   ```
+
+### 2.2 Environment Variables
+
+Set these in your Render dashboard:
+
+```bash
+# Django Settings
+SECRET_KEY=your-super-secret-key-here
+DEBUG=False
+ALLOWED_HOSTS=your-app-name.onrender.com
+CSRF_TRUSTED_ORIGINS=https://your-app-name.onrender.com
+
+# Database
+DATABASE_URL=postgresql://your-render-postgres-url
+
+# Redis (for Celery)
+REDIS_URL=redis://your-render-redis-url
+
+# Facebook (Optional)
+FACEBOOK_GRAPH_ACCESS_TOKEN=your-facebook-access-token
+
+# Email (Optional)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+```
+
+### 2.3 Database Setup
+
+1. Create a PostgreSQL database on Render
+2. Run migrations after first deploy:
+   ```bash
+   render run python manage.py migrate
+   ```
+3. Create superuser:
+   ```bash
+   render run python manage.py createsuperuser
+   ```
+
+---
+
+## 🔧 Step 3: Facebook Integration Setup
+
+### 3.1 Facebook Graph API (Optional but Recommended)
+
+1. Go to [Facebook Developers](https://developers.facebook.com/)
+2. Create a new app or use existing one
+3. Get your App Access Token
+4. Set `FACEBOOK_GRAPH_ACCESS_TOKEN` in environment variables
+
+### 3.2 Testing Facebook Verification
+
+After deployment, test with a real Facebook group post:
+
+1. Create a test task with `task_type = 'share'`
+2. Submit a Facebook group post URL
+3. Monitor Celery logs for verification progress
+4. Check if earnings are credited automatically
+
+---
+
+## 📊 Step 4: Monitoring & Maintenance
+
+### 4.1 Logs
+
+- **Render Logs**: Check service logs in Render dashboard
+- **Celery Logs**: Monitor background task processing
+- **Django Logs**: Application errors and verification results
+
+### 4.2 Performance
+
+- **Redis**: Monitor queue length and processing times
+- **Database**: Check query performance and connection pooling
+- **Browser Automation**: Facebook verification may be slow (5-10 min per task)
+
+### 4.3 Scaling
+
+For high traffic:
+- Increase Render service instances
+- Use Redis cluster for better performance
+- Consider using Selenium Grid for parallel browser automation
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Playwright Installation Fails**
+```bash
+# Manual installation
+pip install playwright
+playwright install chromium
+```
+
+**Celery Connection Issues**
+- Check REDIS_URL format
+- Ensure Redis service is running
+- Verify network connectivity between services
+
+**Facebook Verification Fails**
+- Check if Facebook URLs are accessible
+- Verify Playwright browser installation
+- Test with different Facebook group posts
+- Check for anti-bot measures (may need proxy rotation)
+
+**Database Connection Issues**
+- Verify DATABASE_URL format
+- Check Render PostgreSQL credentials
+- Run migrations after database changes
+
+---
+
+## 🔒 Security Considerations
+
+- Keep `DEBUG=False` in production
+- Use strong `SECRET_KEY`
+- Regularly rotate Facebook access tokens
+- Monitor for suspicious verification patterns
+- Implement rate limiting for task submissions
+
+---
+
+## 📞 Support
+
+For issues:
+1. Check Render service logs
+2. Test locally with `python test_verification.py`
+3. Review Django admin for failed verifications
+4. Check Celery worker status
+
+Happy deploying! 🎉
 
 ## 🌐 Step 2: Deploy to Heroku
 

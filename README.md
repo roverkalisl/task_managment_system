@@ -4,26 +4,32 @@ An AI-powered, automated social media task verification platform built with Djan
 
 ## 🚀 Features
 
+- **Facebook Group Share Verification**: Automated verification of Facebook group posts using browser automation
 - **Multi-Level AI Verification**: 3-tier verification system with OCR and fraud detection
-- **Smart Fraud Detection**: User trust scoring and pattern analysis
-- **Automated Approval**: High-confidence submissions approved instantly
+- **Smart Fraud Detection**: User trust scoring, duplicate detection, and pattern analysis
+- **Automated Approval**: High-confidence submissions approved instantly with earnings credited
+- **Background Processing**: Celery + Redis for asynchronous verification (5-10 min processing)
 - **Admin Dashboard**: Full management interface for tasks and users
 - **Wallet System**: Built-in earning and withdrawal management
-- **Facebook Integration**: Graph API validation for posts and shares
+- **Facebook Integration**: Graph API validation with Playwright browser automation
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Django 4.2, Django REST Framework
+- **Backend**: Django 5.2, Django REST Framework
 - **Database**: PostgreSQL (production), SQLite (development)
-- **AI/ML**: OCR (Tesseract), Image Recognition
+- **AI/ML**: OCR (Tesseract), Image Recognition, Browser Automation
 - **Frontend**: HTML, Tailwind CSS, JavaScript
-- **Deployment**: Heroku-ready with Docker support
+- **Task Queue**: Celery + Redis
+- **Browser Automation**: Playwright
+- **Deployment**: Render/Heroku-ready with Docker support
 
 ## 📋 Prerequisites
 
 - Python 3.11+
 - PostgreSQL (optional, SQLite for dev)
+- Redis (for background tasks)
 - Tesseract OCR (for screenshot verification)
+- Playwright browsers (installed automatically)
 
 ## 🏃‍♂️ Quick Start
 
@@ -34,6 +40,7 @@ An AI-powered, automated social media task verification platform built with Djan
    python -m venv .venv
    .venv\Scripts\activate  # Windows
    pip install -r requirements.txt
+   playwright install  # Install browser binaries
    ```
 
 2. **Database Setup**
@@ -42,12 +49,129 @@ An AI-powered, automated social media task verification platform built with Djan
    python manage.py createsuperuser
    ```
 
-3. **Run Development Server**
+3. **Environment Variables**
    ```bash
+   # Create .env file
+   SECRET_KEY=your-secret-key
+   DEBUG=False
+   ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+   REDIS_URL=redis://localhost:6379/0
+   FACEBOOK_GRAPH_ACCESS_TOKEN=your-facebook-token  # Optional
+   ```
+
+4. **Run Services**
+   ```bash
+   # Terminal 1: Redis server
+   redis-server
+
+   # Terminal 2: Celery worker
+   celery -A config worker --loglevel=info
+
+   # Terminal 3: Django server
    python manage.py runserver
    ```
 
-4. **Access**
+5. **Access**
+   - **Platform**: http://localhost:8000
+   - **Admin**: http://localhost:8000/admin
+
+## 🔧 Facebook Verification System
+
+### How It Works
+
+1. **User Flow**:
+   - User selects Facebook share task
+   - Shares post to Facebook group
+   - Submits group post URL
+   - System verifies automatically (5-10 minutes)
+
+2. **Verification Checks**:
+   - ✅ Valid Facebook group post URL
+   - ✅ Posted to Facebook Group (not profile/page)
+   - ✅ Original task content included in share
+   - ✅ Post exists and is accessible
+   - ✅ No duplicate submissions
+   - ✅ No fake/manipulated links
+
+3. **Auto Actions**:
+   - **Approved**: Credit earnings, mark task complete
+   - **Rejected**: Clear rejection reason
+   - **Manual Review**: Suspicious cases for admin review
+
+### Testing
+
+```bash
+# Run verification tests
+python test_verification.py
+
+# Run full Facebook verification test (requires internet)
+python test_verification.py --full
+```
+
+## 🚀 Deployment
+
+### Render.com Deployment
+
+1. **Connect Repository**
+   - Link your GitHub repo to Render
+   - Set build command: `pip install -r requirements.txt && playwright install`
+   - Set start command: `gunicorn config.wsgi:application`
+
+2. **Environment Variables**
+   ```bash
+   SECRET_KEY=your-secret-key
+   DEBUG=False
+   ALLOWED_HOSTS=your-app-name.onrender.com
+   REDIS_URL=redis://your-redis-url
+   DATABASE_URL=postgresql://your-db-url
+   FACEBOOK_GRAPH_ACCESS_TOKEN=your-token
+   ```
+
+3. **Redis Setup**
+   - Use Render Redis or external Redis service
+   - Set REDIS_URL in environment
+
+4. **Background Workers**
+   - Use Render Cron Jobs or separate service for Celery
+   - Command: `celery -A config worker --loglevel=info`
+
+### Local Development
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+playwright install
+
+# Setup database
+python manage.py migrate
+
+# Run Redis (if not installed, use Docker)
+docker run -d -p 6379:6379 redis:alpine
+
+# Run Celery worker
+celery -A config worker --loglevel=info
+
+# Run Django
+python manage.py runserver
+```
+
+## 📊 API Endpoints
+
+- `GET /api/tasks/` - List available tasks
+- `POST /api/submit/` - Submit task completion
+- `GET /wallet/balance/` - Check earnings balance
+- `POST /wallet/withdraw/` - Request withdrawal
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Add tests for new features
+4. Submit pull request
+
+## 📝 License
+
+MIT License - see LICENSE file for details
    - App: http://127.0.0.1:8000
    - Admin: http://127.0.0.1:8000/admin/
 
