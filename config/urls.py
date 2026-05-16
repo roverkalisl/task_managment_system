@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 # 🔹 Accounts
-from accounts.views import login_view, register_view, logout_view, create_user_view
+from accounts.views import login_view, register_view, logout_view, create_user_view, selflogin_view
 
 # 🔹 Task
 from task.views import dashboard, tasks_view, submit_task, create_task_view, review_submissions, rerun_verification
@@ -18,6 +18,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     # 🔐 Auth
     path('login/', login_view, name='login'),
+    path('selflogin/', selflogin_view, name='selflogin'),
     path('register/', register_view, name='register'),
     path('create-user/', create_user_view, name='create_user'),
     path('logout/', logout_view, name='logout'),

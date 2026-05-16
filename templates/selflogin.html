@@ -1,0 +1,29 @@
+<!-- templates/selflogin.html -->
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-md mx-auto bg-white p-6 rounded shadow">
+    <h2 class="text-xl font-bold mb-4">Quick Login (Phone + Member ID)</h2>
+
+    {% if error %}
+    <div class="bg-red-100 text-red-800 p-2 rounded mb-3">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+        <label class="block text-sm text-gray-600 mb-1">Phone number (required)</label>
+        <input type="text" name="phone" placeholder="e.g. 0712345678"
+            class="w-full p-2 border mb-3 rounded" required>
+
+        <label class="block text-sm text-gray-600 mb-1">Member ID (required)</label>
+        <input type="text" name="member_id" placeholder="Your member ID"
+            class="w-full p-2 border mb-3 rounded" required>
+
+        <button class="bg-blue-600 text-white px-4 py-2 rounded w-full">Login</button>
+    </form>
+
+    <p class="text-sm text-gray-500 mt-3">This method logs you in using your phone and member ID. For production use, add OTP or password verification.</p>
+
+</div>
+
+{% endblock %}

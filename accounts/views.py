@@ -12,8 +12,46 @@ def register_view(request):
         member_id = request.POST.get("member_id")
         password = request.POST.get("password")
 
+        # Basic validation
+        if not username or not phone or not member_id or not password:
+            return render(request, 'register.html', {
+                'error': 'All fields are required.',
+                'username': username,
+                'phone': phone,
+                'member_id': member_id,
+            })
+
+        if len(password) < 6:
+            return render(request, 'register.html', {
+                'error': 'Password must be at least 6 characters.',
+                'username': username,
+                'phone': phone,
+                'member_id': member_id,
+            })
+
         if User.objects.filter(username=username).exists():
-            return render(request, 'register.html', {'error': 'Username exists'})
+            return render(request, 'register.html', {
+                'error': 'Username already exists.',
+                'username': username,
+                'phone': phone,
+                'member_id': member_id,
+            })
+
+        if User.objects.filter(phone=phone).exists():
+            return render(request, 'register.html', {
+                'error': 'Phone number already registered.',
+                'username': username,
+                'phone': phone,
+                'member_id': member_id,
+            })
+
+        if User.objects.filter(member_id=member_id).exists():
+            return render(request, 'register.html', {
+                'error': 'Member ID already registered.',
+                'username': username,
+                'phone': phone,
+                'member_id': member_id,
+            })
 
         user = User.objects.create_user(
             username=username,
@@ -77,6 +115,34 @@ def login_view(request):
             return render(request, 'login.html', {'error': 'Invalid login'})
 
     return render(request, 'login.html')
+
+
+def selflogin_view(request):
+    """Allow login using phone number and member_id (both required).
+
+    NOTE: This bypasses password authentication and should be used only
+    in trusted/self-service environments or paired with additional
+    verification (OTP) in production.
+    """
+    if request.method == 'POST':
+        phone = request.POST.get('phone', '').strip()
+        member_id = request.POST.get('member_id', '').strip()
+
+        if not phone or not member_id:
+            return render(request, 'selflogin.html', {'error': 'Phone and Member ID are required.'})
+
+        try:
+            user = User.objects.get(phone=phone, member_id=member_id)
+        except User.DoesNotExist:
+            return render(request, 'selflogin.html', {'error': 'No matching user found.'})
+
+        # Mark backend so Django accepts this user for login
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
+        login(request, user)
+        UserTrustScore.objects.get_or_create(user=user)
+        return redirect('dashboard')
+
+    return render(request, 'selflogin.html')
 
 
 def logout_view(request):
