@@ -16,6 +16,7 @@
         <a href="{% url 'tasks' %}" class="px-3">Tasks</a>
         <a href="{% url 'wallet' %}" class="px-3">Wallet</a>
         {% if request.user.is_staff %}
+            <a href="{% url 'review_submissions' %}" class="px-3">Review</a>
             <a href="{% url 'create_task' %}" class="px-3">Create Task</a>
             <a href="{% url 'create_user' %}" class="px-3">Create User</a>
         {% endif %}

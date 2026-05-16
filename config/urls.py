@@ -5,7 +5,7 @@ from django.urls import include, path
 from accounts.views import login_view, register_view, logout_view, create_user_view
 
 # 🔹 Task
-from task.views import dashboard, tasks_view, submit_task, create_task_view
+from task.views import dashboard, tasks_view, submit_task, create_task_view, review_submissions, rerun_verification
 
 # 🔹 Wallet
 from wallet.views import wallet_view, withdraw_request
@@ -29,6 +29,8 @@ urlpatterns = [
     path('tasks/', tasks_view, name='tasks'),
     path('tasks/create/', create_task_view, name='create_task'),
     path('submit/<int:task_id>/', submit_task, name='submit_task'),
+    path('review/', review_submissions, name='review_submissions'),
+    path('review/<int:submission_id>/rerun/', rerun_verification, name='rerun_verification'),
 
     # Mobile / API (DRF)
     path('api/', include('api.urls')),

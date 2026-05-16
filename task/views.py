@@ -4,8 +4,10 @@ from django.db import DatabaseError
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.views.decorators.http import require_POST
+from django.utils import timezone
 from .models import Task, TaskSubmission
-from wallet.models import Wallet
+from wallet.models import Wallet, Transaction
 
 _url_validator = URLValidator()
 
@@ -145,3 +147,37 @@ def dashboard(request):
         'trust_score': trust.trust_score,
         'recent_submissions': recent_submissions,
     })
+
+
+@login_required
+def review_submissions(request):
+    if not request.user.is_staff:
+        raise PermissionDenied()
+
+    submissions = TaskSubmission.objects.select_related('user', 'task').order_by('-submitted_at')
+    manual_queue = submissions.filter(status='manual_review')
+    auto_queue = submissions.filter(status__in=['level1_pending', 'level2_pending', 'level3_pending'])
+    return render(request, 'review_submissions.html', {
+        'manual_queue': manual_queue,
+        'auto_queue': auto_queue,
+    })
+
+
+@login_required
+@require_POST
+def rerun_verification(request, submission_id):
+    if not request.user.is_staff:
+        raise PermissionDenied()
+
+    submission = get_object_or_404(TaskSubmission, id=submission_id)
+    submission.status = 'level1_pending'
+    submission.feedback = 'Staff requested auto re-verification.'
+    submission.verified_at = None
+    submission.save()
+
+    try:
+        start_verification(submission.id)
+    except Exception:
+        pass
+
+    return redirect('review_submissions')

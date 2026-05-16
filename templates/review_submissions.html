@@ -1,0 +1,104 @@
+<!-- templates/review_submissions.html -->
+{% extends 'base.html' %}
+{% block content %}
+
+<h2 class="text-2xl font-bold mb-4">Staff Review</h2>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white p-4 rounded shadow">
+        <h3 class="text-lg font-semibold mb-2">Manual Review Queue</h3>
+        <p class="text-sm text-gray-600 mb-3">Submissions flagged by the automated verifier.</p>
+        <p class="font-bold text-blue-700">{{ manual_queue.count }} pending</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow">
+        <h3 class="text-lg font-semibold mb-2">Auto Verification Queue</h3>
+        <p class="text-sm text-gray-600 mb-3">Submissions currently running through verification levels.</p>
+        <p class="font-bold text-blue-700">{{ auto_queue.count }} pending</p>
+    </div>
+</div>
+
+{% if manual_queue or auto_queue %}
+<div class="space-y-8">
+    {% if manual_queue %}
+    <div class="bg-white p-4 rounded shadow">
+        <h3 class="font-bold mb-3">Manual review submissions</h3>
+        <table class="w-full text-sm border-collapse">
+            <thead>
+                <tr class="border-b text-left text-gray-600">
+                    <th class="py-2">User</th>
+                    <th class="py-2">Task</th>
+                    <th class="py-2">Link</th>
+                    <th class="py-2">Status</th>
+                    <th class="py-2">Flags</th>
+                    <th class="py-2">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in manual_queue %}
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2">{{ submission.user.username }}</td>
+                    <td class="py-2">{{ submission.task.title }}</td>
+                    <td class="py-2 break-words max-w-xs">
+                        <a href="{{ submission.submitted_link }}" target="_blank" class="text-blue-600 underline">Open link</a>
+                    </td>
+                    <td class="py-2 text-yellow-700 font-semibold">{{ submission.get_status_display }}</td>
+                    <td class="py-2">{{ submission.fraud_flags|join:", " }}</td>
+                    <td class="py-2">
+                        <form action="{% url 'rerun_verification' submission.id %}" method="post" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">Re-run auto check</button>
+                        </form>
+                        {% if submission.screenshot %}
+                        <a href="{{ submission.screenshot.url }}" target="_blank" class="ml-2 text-blue-600 underline text-xs">View screenshot</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if auto_queue %}
+    <div class="bg-white p-4 rounded shadow">
+        <h3 class="font-bold mb-3">Auto verification queue</h3>
+        <table class="w-full text-sm border-collapse">
+            <thead>
+                <tr class="border-b text-left text-gray-600">
+                    <th class="py-2">User</th>
+                    <th class="py-2">Task</th>
+                    <th class="py-2">Link</th>
+                    <th class="py-2">Status</th>
+                    <th class="py-2">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in auto_queue %}
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2">{{ submission.user.username }}</td>
+                    <td class="py-2">{{ submission.task.title }}</td>
+                    <td class="py-2 break-words max-w-xs">
+                        <a href="{{ submission.submitted_link }}" target="_blank" class="text-blue-600 underline">Open link</a>
+                    </td>
+                    <td class="py-2 text-gray-700">{{ submission.get_status_display }}</td>
+                    <td class="py-2">
+                        <form action="{% url 'rerun_verification' submission.id %}" method="post" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">Re-run auto check</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+    <div class="bg-white p-6 rounded shadow text-gray-700">
+        <p class="font-semibold">No submissions need manual review or auto recheck right now.</p>
+        <p class="text-sm text-gray-600 mt-2">Use this page to inspect staff review queue and re-run link verification on flagged submissions.</p>
+    </div>
+{% endif %}
+
+{% endblock %}

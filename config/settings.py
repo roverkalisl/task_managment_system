@@ -85,13 +85,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # DATABASE
-if os.getenv('DATABASE_URL'):
-    import dj_database_url
+import dj_database_url
+
+# Use `DATABASE_URL` environment variable if provided; otherwise fall back to SQLite.
+DEFAULT_DB_URL = os.getenv('DATABASE_URL')
+if DEFAULT_DB_URL:
     DATABASES = {
-        'default': dj_database_url.config(
-            default=os.getenv('DATABASE_URL'),
-            conn_max_age=600,
-        )
+        'default': dj_database_url.config(default=DEFAULT_DB_URL, conn_max_age=600)
     }
 else:
     DATABASES = {
